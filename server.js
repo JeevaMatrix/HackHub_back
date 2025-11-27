@@ -16,13 +16,8 @@ const app = express();
 app.use(express.json());
 app.use(cookieParser());
 app.use(cors({
-  origin: [
-    "https://hackhub-now.netlify.app",
-    "http://localhost:3000", // keep for local development
-  ],
-  methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
-  credentials: true,
-  allowedHeaders: "Content-Type,Authorization"
+  origin: "https://hackhub-now.netlify.app",
+  credentials: true
 }));
 
 // Routes
