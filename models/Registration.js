@@ -14,27 +14,21 @@ const registrationSchema = new mongoose.Schema(
       required: true
     },
 
-    // registration status
+    orderId: { type: String, required: true }, // Cashfree order
+
     status: {
       type: String,
       enum: ["pending", "registered", "cancelled"],
       default: "pending"
     },
 
-    // payment flow
     paymentStatus: {
       type: String,
-      enum: ["not_required", "pending", "paid", "failed"],
-      default: "not_required"
-    },
-
-    // cashfree or any payment id
-    paymentId: { type: String },
-
-    // extra metadata for future
-    notes: { type: String }
+      enum: ["pending", "paid", "failed"],
+      default: "pending"
+    }
   },
-  { timestamps: { createdAt: "registeredAt", updatedAt: false } }
+  { timestamps: { createdAt: "registeredAt", updatedAt: true } }
 );
 
 module.exports = mongoose.model("Registration", registrationSchema);

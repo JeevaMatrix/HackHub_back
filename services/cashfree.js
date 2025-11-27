@@ -1,6 +1,5 @@
 const axios = require("axios");
 
-// BASE URLs
 const PG_BASE = process.env.CF_ENV === "PROD"
   ? "https://api.cashfree.com/pg"
   : "https://sandbox.cashfree.com/pg";
@@ -11,19 +10,20 @@ const PAYOUT_BASE = process.env.CF_ENV === "PROD"
 
 module.exports = {
 
-  // -------------------------
-  // 1. PAYMENT GATEWAY ORDER
-  // -------------------------
-  createOrder: async ({ amount, eventId, studentId }) => {
+  // 1) CREATE PAYMENT ORDER
+  createOrder: async ({ amount, eventId, student }) => {
     const payload = {
       order_amount: amount,
       order_currency: "INR",
+
       order_meta: {
         return_url: `${process.env.CLIENT_URL}/payment/success?order_id={order_id}`
       },
+
       customer_details: {
-        customer_id: studentId,
-        customer_email: "student@example.com"
+        customer_id: student._id.toString(),
+        customer_email: student.email,
+        customer_phone: student.phone
       }
     };
 
@@ -34,6 +34,7 @@ module.exports = {
         headers: {
           "x-client-id": process.env.CF_PG_APP_ID,
           "x-client-secret": process.env.CF_PG_SECRET_KEY,
+          "x-api-version": "2025-01-01",
           "Content-Type": "application/json"
         }
       }
@@ -42,23 +43,39 @@ module.exports = {
     return res.data;
   },
 
-  // -------------------------
-  // 2. PAYOUT TO ORGANIZER
-  // -------------------------
-  sendUPIPayout: async ({ upiId, amount }) => {
+
+  // 2) SEND UPI PAYOUT
+  sendUPIPayout: async ({ upiId, amount, transferId }) => {
+
+    // 2.1 Authenticate
+    const authRes = await axios.post(
+      `${PAYOUT_BASE}/payout/v1/authorize`,
+      {},
+      {
+        headers: {
+          "X-Client-Id": process.env.CF_PAYOUT_CLIENT_ID,
+          "X-Client-Secret": process.env.CF_PAYOUT_SECRET_KEY
+        }
+      }
+    );
+
+    const token = authRes.data.data.token;
+
+    // 2.2 Perform direct transfer
     const payload = {
-      upi_id: upiId,
-      amount: amount,
-      purpose: "event_payout",
+      beneId: upiId,          // e.g "jeeva@upi"
+      amount: amount.toString(),
+      transferId: transferId || `transfer_${Date.now()}`,
+      transferMode: "upi",
+      remarks: "event_payout"
     };
 
     const res = await axios.post(
-      `${PAYOUT_BASE}/v1/upi`,
+      `${PAYOUT_BASE}/payout/v1/directTransfer`,
       payload,
       {
         headers: {
-          "x-client-id": process.env.CF_PAYOUT_CLIENT_ID,
-          "x-client-secret": process.env.CF_PAYOUT_SECRET_KEY,
+          "Authorization": `Bearer ${token}`,
           "Content-Type": "application/json"
         }
       }

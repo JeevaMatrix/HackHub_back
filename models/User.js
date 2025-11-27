@@ -12,6 +12,14 @@ const userSchema = new mongoose.Schema(
     collegeId: String,
     department: String,
     year: String,
+    phone: {
+      type: String,
+      default: null
+    },
+    upiId: {
+      type: String,
+      default: null
+    },
 
     isEmailVerified: { type: Boolean, default: false },
 

@@ -13,12 +13,13 @@ connectDB();
 const app = express();
 
 // Middleware
-app.use(express.json());
-app.use(cookieParser());
 app.use(cors({
   origin: "https://hackhub-now.netlify.app",
   credentials: true
 }));
+app.use("/api/payment/webhook", express.raw({ type: "application/json" }));
+app.use(express.json());
+app.use(cookieParser());
 
 // Routes
 app.use('/api/auth', require('./routes/authRoutes'));
@@ -28,6 +29,12 @@ app.use('/api/event', require('./routes/eventRoutes'));
 
 //registrations
 app.use('/api/register', require('./routes/registration'));
+
+//payments
+app.use('/api/payment', require('./routes/paymentRoutes'));
+
+//payouts
+app.use('/api/payout', require('./routes/payoutRoutes'));
 
 // Error handler (custom middleware)
 app.use(errorHandler);
