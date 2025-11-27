@@ -4,6 +4,7 @@ const Registration = require("../models/Registration");
 const Event = require("../models/Event");
 const cashfree = require("../services/cashfree");
 const payoutService = require("../services/payoutService");
+const User = require("../models/User");
 
 // -------------------------
 // CREATE ORDER
@@ -12,27 +13,26 @@ exports.createOrder = async (req, res) => {
   try {
     const { eventId } = req.body;
     const user = req.user; // from auth middleware
+    const student = await User.findById(user.id);
 
     const event = await Event.findById(eventId);
     if (!event) return res.status(404).json({ message: "Event not found" });
-
     if (!user.phone) {
       return res.status(400).json({ message: "Phone number required for payment" });
     }
 
 
-
     const order = await cashfree.createOrder({
       amount: event.pricing.amount,
       eventId,
-      student: user
+      student: student
     });
 
     // Save payment entry
     await Payment.create({
       orderId: order.order_id,
       eventId,
-      studentId: user._id,
+      studentId: student._id,
       amount: event.pricing.amount,
       status: "pending"
     });
@@ -40,7 +40,7 @@ exports.createOrder = async (req, res) => {
     // Save registration entry
     await Registration.create({
       eventId,
-      studentId: user._id,
+      studentId: student._id,
       orderId: order.order_id,
       status: "pending",
       paymentStatus: "pending"
@@ -62,9 +62,11 @@ exports.cashfreeWebhook = async (req, res) => {
   try {
     const signature = req.headers["x-webhook-signature"];
     const timestamp = req.headers["x-webhook-timestamp"];
-    const rawBody = JSON.stringify(req.body);
+    
+    // Use raw body (buffer converted to string)
+    const rawBody = req.body.toString('utf8');
 
-    // verify signature
+    // Verify signature
     const secret = process.env.CF_PG_SECRET_KEY;
     const expectedSig = crypto
       .createHmac("sha256", secret)
@@ -75,7 +77,8 @@ exports.cashfreeWebhook = async (req, res) => {
       return res.status(403).json({ message: "Invalid signature" });
     }
 
-    const data = req.body;
+    // Parse the body after verification
+    const data = JSON.parse(rawBody);
     const orderId = data.data.order.order_id;
     const paymentStatus = data.data.payment.payment_status;
     const cfPaymentId = data.data.payment.cf_payment_id;
@@ -98,7 +101,6 @@ exports.cashfreeWebhook = async (req, res) => {
 
       payoutService.autoPayout(registration, payment);
     }
-
     else if (data.type === "PAYMENT_FAILED_WEBHOOK") {
       payment.status = "failed";
       await payment.save();

@@ -12,12 +12,15 @@ connectDB();
 
 const app = express();
 
+
 // Middleware
 app.use(cors({
   origin: "https://hackhub-now.netlify.app",
+  // origin: "http://localhost:3000", 
   credentials: true
 }));
 app.use("/api/payment/webhook", express.raw({ type: "application/json" }));
+
 app.use(express.json());
 app.use(cookieParser());
 

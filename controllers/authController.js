@@ -27,31 +27,60 @@ const setAuthCookies = (res, accessToken, refreshToken) => {
 // -----------------------------
 exports.signup = async (req, res) => {
   try {
-    const { name, email, password, role, collegeId, department, year } = req.body;
+    const { 
+      name, 
+      email, 
+      password, 
+      role, 
+      collegeId, 
+      department, 
+      year,
+      phone,
+      upiId
+    } = req.body;
 
+    // Required basic fields
     if (!name || !email || !password || !role)
       return res.status(400).json({ message: "Missing required fields" });
 
+    // Phone is required for ALL users
+    if (!phone)
+      return res.status(400).json({ message: "Phone number is required" });
+
+    // Organizer must have UPI ID
+    if (role === "organizer" && !upiId)
+      return res.status(400).json({ message: "UPI ID is required for organizers" });
+
+    // Unique email check
     const existingUser = await User.findOne({ email });
     if (existingUser)
       return res.status(400).json({ message: "Email already exists" });
 
+    // Hash password
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    const user = await User.create({
+    // Build user object
+    const userObj = {
       name,
       email,
       passwordHash,
       role,
+      phone,
       collegeId,
       department,
-      year
-    });
+      year,
+      upiId: role === "organizer" ? upiId : null,
+      organizerInfo: role === "organizer" ? { designation: null } : undefined
+    };
 
+    const user = await User.create(userObj);
+
+    // Generate tokens
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
 
+    // Store tokens in cookies
     setAuthCookies(res, accessToken, refreshToken);
 
     return res.status(201).json({
@@ -60,7 +89,9 @@ exports.signup = async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
-        role: user.role
+        role: user.role,
+        phone: user.phone,
+        upiId: user.upiId
       }
     });
 
@@ -69,6 +100,7 @@ exports.signup = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 // -----------------------------
 // LOGIN
