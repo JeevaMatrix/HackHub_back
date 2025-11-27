@@ -9,7 +9,7 @@ const setAuthCookies = (res, accessToken, refreshToken) => {
   res.cookie("accessToken", accessToken, {
     httpOnly: true,
     secure: true,      // set true in production (HTTPS)
-    sameSite: "strict",
+    sameSite: "none",
     maxAge: 15 * 60 * 1000 // 15 min
   });
 
@@ -17,7 +17,7 @@ const setAuthCookies = (res, accessToken, refreshToken) => {
   res.cookie("refreshToken", refreshToken, {
     httpOnly: true,
     secure: true,
-    sameSite: "strict",
+    sameSite: "none",
     maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
   });
 };
