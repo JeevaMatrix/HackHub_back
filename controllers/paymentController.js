@@ -3,7 +3,7 @@ const Payment = require("../models/Payment");
 const Registration = require("../models/Registration");
 const Event = require("../models/Event");
 const cashfree = require("../services/cashfree");
-const payoutService = require("../services/payout");
+const payoutService = require("../services/payoutService");
 
 // -------------------------
 // CREATE ORDER
@@ -20,7 +20,7 @@ exports.createOrder = async (req, res) => {
       return res.status(400).json({ message: "Phone number required for payment" });
     }
 
-    
+
 
     const order = await cashfree.createOrder({
       amount: event.pricing.amount,
