@@ -16,7 +16,7 @@ const app = express();
 app.use(express.json());
 app.use(cookieParser());
 app.use(cors({
-  origin: 'http://localhost:3000', // or your frontend domain
+  origin: 'https://hackhub-now.netlify.app/', // or your frontend domain
   credentials: true,
 }));
 
