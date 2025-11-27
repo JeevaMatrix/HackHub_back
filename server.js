@@ -24,7 +24,6 @@ app.use(cors({
   credentials: true,
   allowedHeaders: "Content-Type,Authorization"
 }));
-app.options("*", cors());
 
 // Routes
 app.use('/api/auth', require('./routes/authRoutes'));
