@@ -1,6 +1,6 @@
 const router = require("express").Router();
-// const payoutController = require("../controllers/payoutController");
+const paymentController = require("../controllers/paymentController");
 
-// router.post("/organizer", payoutController.manualPayout); // optional
+router.post("/organizer", paymentController.manualPayout); // optional
 
 module.exports = router;

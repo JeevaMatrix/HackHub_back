@@ -117,3 +117,25 @@ exports.cashfreeWebhook = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+
+//manual payout controller (optional)
+exports.manualPayout = async (req, res) => {
+  try {
+    const { registrationId, paymentId } = req.body;
+    const registration = await Registration.findById(registrationId);
+    const payment = await Payment.findById(paymentId);
+    if (!registration || !payment) {
+      return res.status(404).json({ message: "Record not found" });
+    }
+    const result = await payoutService.autoPayout(registration, payment);
+    if (result) {
+      res.json({ message: "Payout processed successfully" });
+    } else {
+      res.status(400).json({ message: "Payout failed or skipped" });
+    }
+  } catch (err) {
+    console.error("Manual Payout Error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};

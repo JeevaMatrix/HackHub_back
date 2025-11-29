@@ -5,12 +5,12 @@ const PG_BASE = process.env.CF_ENV === "PROD"
   : "https://sandbox.cashfree.com/pg";
 
 const PAYOUT_BASE = process.env.CF_ENV === "PROD"
-  ? "https://payout-api.cashfree.com"
-  : "https://payout-gamma.cashfree.com";
+  ? "https://payout-api.cashfree.com/payouts/v2"
+  : "https://sandbox.cashfree.com/payouts/v2";
 
 module.exports = {
 
-  // 1) CREATE PAYMENT ORDER
+  // 1) PAYMENT GATEWAY: CREATE ORDER
   createOrder: async ({ amount, eventId, student }) => {
     const payload = {
       order_amount: amount,
@@ -43,39 +43,45 @@ module.exports = {
     return res.data;
   },
 
-
-  // 2) SEND UPI PAYOUT
-  sendUPIPayout: async ({ upiId, amount, transferId }) => {
-
-    // 2.1 Authenticate
-    const authRes = await axios.post(
-      `${PAYOUT_BASE}/payout/v1/authorize`,
-      {},
+  // 2) PAYOUTS V2: Create Beneficiary (UPI support)
+  createBeneficiary: async ({ beneId, name, email, phone, upiId }) => {
+    return axios.post(
+      `${PAYOUT_BASE}/beneficiaries`,
+      {
+        beneficiary_id: beneId,
+        name,
+        email,
+        phone,
+        bank_details: {
+          vpa: upiId
+        }
+      },
       {
         headers: {
-          "X-Client-Id": process.env.CF_PAYOUT_CLIENT_ID,
-          "X-Client-Secret": process.env.CF_PAYOUT_SECRET_KEY
+          "X-Cashfree-Client-Id": process.env.CF_PAYOUT_CLIENT_ID,
+          "X-Cashfree-Client-Secret": process.env.CF_PAYOUT_SECRET_KEY,
+          "Content-Type": "application/json"
         }
       }
     );
+  },
 
-    const token = authRes.data.data.token;
-
-    // 2.2 Perform direct transfer
-    const payload = {
-      beneId: upiId,          // e.g "jeeva@upi"
-      amount: amount.toString(),
-      transferId: transferId || `transfer_${Date.now()}`,
-      transferMode: "upi",
-      remarks: "event_payout"
-    };
-
+  // 3) PAYOUTS V2: Standard UPI Transfer
+  sendUPIPayout: async ({ beneId, amount, transferId }) => {
     const res = await axios.post(
-      `${PAYOUT_BASE}/payout/v1/directTransfer`,
-      payload,
+      `${PAYOUT_BASE}/transfers`,
+      {
+        transfer_id: transferId || `payout_${Date.now()}`,
+        amount,
+        currency: "INR",
+        transfer_mode: "upi",
+        beneficiary_id: beneId,
+        narration: "event payout"
+      },
       {
         headers: {
-          "Authorization": `Bearer ${token}`,
+          "X-Cashfree-Client-Id": process.env.CF_PAYOUT_CLIENT_ID,
+          "X-Cashfree-Client-Secret": process.env.CF_PAYOUT_SECRET_KEY,
           "Content-Type": "application/json"
         }
       }

@@ -1,26 +1,25 @@
 const Event = require("../models/Event");
 const jwt = require("jsonwebtoken");
+const uploadService = require("../services/uploadService");
+
+const { Parser } = require("json2csv");
+const Registration = require("../models/Registration");
+const User = require("../models/User");
 
 exports.createEvent = async (req, res) => {
   try {
     const token = req.cookies.accessToken;
+    if (!token) return res.status(401).json({ message: "Not authenticated" });
 
-    if (!token)
-      return res.status(401).json({ message: "Not authenticated" });
-
-    // Decode token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // Only admin or organizer role
     if (decoded.role !== "admin" && decoded.role !== "organizer") {
       return res.status(403).json({ message: "Only admins/organizers can create events" });
     }
 
-    // Extract event fields
     const {
       title,
       description,
-      bannerUrl,
       type,
       visibility,
       allowedCollegeIds,
@@ -31,23 +30,40 @@ exports.createEvent = async (req, res) => {
       tags
     } = req.body;
 
-    // Required validations
     if (!title || !type)
       return res.status(400).json({ message: "Title and type are required" });
 
     if (!date || !date.start || !date.end)
       return res.status(400).json({ message: "Event start and end date required" });
 
-    // Create event object
+    let bannerUrl = null;
+    let brochureUrl = null;
+
+    // Upload BANNER
+    if (req.files?.banner) {
+      const uploadRes = await uploadService.uploadImage(
+        req.files.banner[0].path
+      );
+      bannerUrl = uploadRes.secure_url;
+    }
+
+    // Upload BROCHURE (PDF)
+    if (req.files?.brochure) {
+      const uploadRes = await uploadService.uploadPDF(
+        req.files.brochure[0].path
+      );
+      brochureUrl = uploadRes.secure_url;
+    }
+
     const eventData = {
       title,
       description,
-      bannerUrl,
-
-      organizerId: decoded.id, // from token
-
       type,
       visibility: visibility || "public",
+      organizerId: decoded.id,
+
+      bannerUrl,
+      brochureUrl,
 
       allowedCollegeIds: visibility === "private"
         ? allowedCollegeIds || []
@@ -75,12 +91,9 @@ exports.createEvent = async (req, res) => {
 
       registrationLimit: registrationLimit || 0,
       registeredCount: 0,
-      registeredStudents: [],
-
       tags: tags || []
     };
 
-    // Save event
     const event = await Event.create(eventData);
 
     return res.status(201).json({
@@ -90,14 +103,10 @@ exports.createEvent = async (req, res) => {
 
   } catch (err) {
     console.error("Create Event Error:", err);
-
-    if (err.name === "TokenExpiredError") {
-      return res.status(401).json({ message: "Token expired" });
-    }
-
-    res.status(500).json({ message: "Server error" });
+    return res.status(500).json({ message: "Server error" });
   }
 };
+
 
 // ==============================
 // GET ALL EVENTS (PUBLIC)
@@ -142,24 +151,50 @@ exports.updateEvent = async (req, res) => {
     const event = await Event.findById(req.params.id);
     if (!event) return res.status(404).json({ message: "Event not found" });
 
-    // Only organizer who created it OR admin
-    if (event.organizerId.toString() !== decoded.id && decoded.role !== "organizer") {
+    // Only same organizer OR admin
+    if (
+      event.organizerId.toString() !== decoded.id &&
+      decoded.role !== "admin"
+    ) {
       return res.status(403).json({ message: "Not allowed" });
     }
 
-    const updated = await Event.findByIdAndUpdate(
+    // Prepare update object
+    const updates = { ...req.body };
+
+    // Update banner if uploaded
+    if (req.files?.banner) {
+      const uploadRes = await uploadService.uploadImage(
+        req.files.banner[0].path
+      );
+      updates.bannerUrl = uploadRes.secure_url;
+    }
+
+    // Update brochure if uploaded
+    if (req.files?.brochure) {
+      const uploadRes = await uploadService.uploadPDF(
+        req.files.brochure[0].path
+      );
+      updates.brochureUrl = uploadRes.secure_url;
+    }
+
+    const updatedEvent = await Event.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      updates,
       { new: true }
     );
 
-    return res.json({ event: updated });
+    return res.json({
+      message: "Event updated",
+      event: updatedEvent
+    });
 
   } catch (err) {
     console.error("Update Event Error:", err);
     return res.status(500).json({ message: "Server error" });
   }
 };
+
 
 // ==============================
 // DELETE EVENT (ORGANIZER/ADMIN)
@@ -201,5 +236,56 @@ exports.getMyEvents = async (req, res) => {
   } catch (err) {
     console.error("Organizer Events Error:", err);
     return res.status(500).json({ message: "Server error" });
+  }
+};
+
+exports.downloadRegistrationsCSV = async (req, res) => {
+  try {
+    const eventId = req.params.id;
+    const userId = req.user.id;
+
+    const event = await Event.findById(eventId);
+
+    if (!event) return res.status(404).send("Event not found");
+
+    if (event.organizerId.toString() !== userId)
+      return res.status(403).send("Not allowed");
+
+    // 1. Fetch all registrations
+    const registrations = await Registration.find({ eventId });
+
+    // 2. Map with student details
+    const data = [];
+    for (const r of registrations) {
+      const student = await User.findById(r.studentId);
+
+      data.push({
+        name: student.name,
+        email: student.email,
+        phone: student.phone,
+        registeredAt: r.createdAt,
+        paymentStatus: r.paymentStatus,
+      });
+    }
+
+    // 3. Convert to CSV
+    const fields = ["name", "email", "phone", "registeredAt", "paymentStatus"];
+    const parser = new Parser({ fields });
+    const csv = parser.parse(data);
+
+    // 4. Send as file
+    const filename = `${event.title.replace(/\s+/g, "_")}_registrations.csv`;
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${filename}"`
+    );
+
+    res.send(csv);
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Server error");
   }
 };

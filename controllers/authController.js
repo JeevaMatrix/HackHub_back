@@ -2,6 +2,7 @@ const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const { generateAccessToken, generateRefreshToken } = require('../utils/generateTokens');
 const jwt = require('jsonwebtoken');
+const cashfree = require('../services/cashfree');
 
 // Helper to set cookies
 const setAuthCookies = (res, accessToken, refreshToken) => {
@@ -39,19 +40,15 @@ exports.signup = async (req, res) => {
       upiId
     } = req.body;
 
-    // Required basic fields
     if (!name || !email || !password || !role)
       return res.status(400).json({ message: "Missing required fields" });
 
-    // Phone is required for ALL users
     if (!phone)
       return res.status(400).json({ message: "Phone number is required" });
 
-    // Organizer must have UPI ID
     if (role === "organizer" && !upiId)
       return res.status(400).json({ message: "UPI ID is required for organizers" });
 
-    // Unique email check
     const existingUser = await User.findOne({ email });
     if (existingUser)
       return res.status(400).json({ message: "Email already exists" });
@@ -74,13 +71,44 @@ exports.signup = async (req, res) => {
       organizerInfo: role === "organizer" ? { designation: null } : undefined
     };
 
-    const user = await User.create(userObj);
+    // Step 1: Create user
+    let user = await User.create(userObj);
 
-    // Generate tokens
+    // Step 2: If organizer → create beneficiary on Cashfree
+    if (role === "organizer") {
+      try {
+        const beneId = `bene_${user._id}_${Date.now()}`;
+
+        await cashfree.createBeneficiary({
+          beneId,
+          name,
+          email,
+          phone,
+          upiId
+        });
+
+        // Update user with beneId
+        user.beneId = beneId;
+        user.isBeneficiaryCreated = true;
+        await user.save();
+
+      } catch (err) {
+        console.error("Cashfree Beneficiary Creation Error:", err);
+
+        // If Cashfree fails → rollback user creation
+        await User.findByIdAndDelete(user._id);
+        return res.status(500).json({
+          message: "Beneficiary creation failed. Signup cancelled.",
+          error: err.response?.data || err
+        });
+      }
+    }
+
+    // Step 3: Generate tokens
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
 
-    // Store tokens in cookies
+    // Step 4: Set cookies
     setAuthCookies(res, accessToken, refreshToken);
 
     return res.status(201).json({
@@ -91,7 +119,8 @@ exports.signup = async (req, res) => {
         email: user.email,
         role: user.role,
         phone: user.phone,
-        upiId: user.upiId
+        upiId: user.upiId,
+        beneId: user.beneId || null
       }
     });
 

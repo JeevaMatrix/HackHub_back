@@ -7,49 +7,46 @@ exports.autoPayout = async (registration, payment) => {
   try {
     // 1. Load event + organizer
     const event = await Event.findById(registration.eventId);
-    if (!event) {
-      console.log("Event not found for payout");
-      return false;
-    }
+    if (!event) return false;
 
     const organizer = await User.findById(event.organizerId);
-    if (!organizer) {
-      console.log("Organizer not found");
+    if (!organizer) return false;
+
+    if (!organizer.beneId) {
+      console.log("Organizer missing beneId. Cannot payout.");
       return false;
     }
 
-    if (!organizer.upiId) {
-      console.log("Organizer has no UPI ID. Skipping payout.");
-      return false;
-    }
-
-    // 2. Calculate payout amount
+    // 2. Calculate payout
     const ticketPrice = payment.amount;
-    const platformFee = 5; // TODO: make dynamic later
+    const platformFee = 5;
     const payoutAmount = ticketPrice - platformFee;
 
-    // 3. Unique transfer ID (mandatory for Cashfree)
+    // 3. Unique transfer ID
     const transferId = `payout_${Date.now()}_${registration._id}`;
 
-    // 4. Send payout (via Direct Transfer)
+    // 4. Call NEW V2 payout function
     const payoutRes = await CashfreeService.sendUPIPayout({
-      upiId: organizer.upiId,
+      beneId: organizer.beneId,
       amount: payoutAmount,
       transferId
     });
 
-    console.log("Payout API Response:", payoutRes);
+    console.log("Payout V2 Response:", payoutRes);
 
-    // 5. Extract correct fields based on Cashfree response
+    // 5. Extract V2 fields
+    const transferStatus = payoutRes.transfer?.status || "FAILED";
+
     const status =
-      payoutRes.status === "SUCCESS" ? "completed" :
-      payoutRes.status === "PENDING" ? "pending" :
-      "failed";
+      transferStatus === "SUCCESS"
+        ? "completed"
+        : transferStatus === "PENDING"
+        ? "pending"
+        : "failed";
 
     const referenceId =
-      payoutRes.data?.referenceId ||
-      payoutRes.data?.utr ||
-      payoutRes.data?.acknowledgeId ||
+      payoutRes.transfer?.utr ||
+      payoutRes.transfer?.reference_id ||
       null;
 
     // 6. Save payout record
@@ -68,7 +65,7 @@ exports.autoPayout = async (registration, payment) => {
     return true;
 
   } catch (err) {
-    console.error("Auto Payout Error:", err);
+    console.error("Auto Payout Error:", err.response?.data || err);
     return false;
   }
 };

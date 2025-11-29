@@ -23,6 +23,16 @@ const userSchema = new mongoose.Schema(
 
     isEmailVerified: { type: Boolean, default: false },
 
+    beneId: {
+      type: String,
+      default: null
+    },
+
+    isBeneficiaryCreated: {
+      type: Boolean,
+      default: false
+    },
+
     organizerInfo: {
       designation: String,
       approvalStatus: {

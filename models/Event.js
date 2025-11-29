@@ -5,7 +5,9 @@ const eventSchema = new mongoose.Schema(
     // Basic Details
     title: { type: String, required: true },
     description: { type: String },
-    bannerUrl: { type: String }, // Image URL
+    
+    bannerUrl: { type: String, default: null },
+    brochureUrl: { type: String, default: null },
 
     // Organizer
     organizerId: {
