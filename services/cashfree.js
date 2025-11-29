@@ -107,12 +107,12 @@ module.exports = {
         narration: "event payout"
       },
       {
-        headers: {
-          "X-Cashfree-Client-Id": process.env.CF_PAYOUT_CLIENT_ID,
-          "X-Cashfree-Client-Secret": process.env.CF_PAYOUT_SECRET_KEY,
-          "X-Cf-Signature": generateSignature(),
-          "Content-Type": "application/json"
-        }
+      headers: {
+        "X-Client-Id": process.env.CF_PAYOUT_CLIENT_ID,
+        "X-Client-Secret": process.env.CF_PAYOUT_SECRET_KEY,
+        "X-Cf-Signature": generateSignature(),
+        "Content-Type": "application/json"
+      }
       }
     );
 
