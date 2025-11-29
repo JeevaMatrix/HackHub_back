@@ -1,4 +1,6 @@
 const axios = require("axios");
+const crypto = require('crypto');
+const fs = require('fs');
 
 const PG_BASE = process.env.CF_ENV === "PROD"
   ? "https://api.cashfree.com/pg"
@@ -7,6 +9,31 @@ const PG_BASE = process.env.CF_ENV === "PROD"
 const PAYOUT_BASE = process.env.CF_ENV === "PROD"
   ? "https://payout-api.cashfree.com/payouts/v2"
   : "https://sandbox.cashfree.com/payouts/v2";
+
+
+function generateSignature() {
+  const clientId = process.env.CF_PAYOUT_CLIENT_ID;
+  const timestamp = Math.floor(Date.now() / 1000); // Unix timestamp
+  
+  // Combine clientId and timestamp
+  const dataToEncrypt = `${clientId}.${timestamp}`;
+  
+  // Read the public key file
+  const publicKey = fs.readFileSync(process.env.PUBLIC_KEY_PATH, 'utf8');
+  
+  // Encrypt using RSA with OAEP padding
+  const encrypted = crypto.publicEncrypt(
+    {
+      key: publicKey,
+      padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+      oaepHash: 'sha1'
+    },
+    Buffer.from(dataToEncrypt)
+  );
+  
+  // Return base64 encoded signature
+  return encrypted.toString('base64');
+}
 
 module.exports = {
 
@@ -60,6 +87,7 @@ module.exports = {
         headers: {
           "X-Cashfree-Client-Id": process.env.CF_PAYOUT_CLIENT_ID,
           "X-Cashfree-Client-Secret": process.env.CF_PAYOUT_SECRET_KEY,
+          "X-Cf-Signature": generateSignature(),
           "Content-Type": "application/json"
         }
       }
@@ -82,11 +110,12 @@ module.exports = {
         headers: {
           "X-Cashfree-Client-Id": process.env.CF_PAYOUT_CLIENT_ID,
           "X-Cashfree-Client-Secret": process.env.CF_PAYOUT_SECRET_KEY,
+          "X-Cf-Signature": generateSignature(),
           "Content-Type": "application/json"
         }
       }
     );
 
     return res.data;
-  }
+  },
 };
